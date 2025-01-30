@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 import requests
 import urllib3
 import matplotlib.animation as animation
@@ -156,17 +157,18 @@ def Add_Graph_Columns(activity_data, params):
 
 
 def Plot_Graphs(activity_data, params):
-    '''
+
     formatted_dates = []
     #create a new column with the dates formatted as day/month
     for i in range(0, activity_data.shape[0]):
         month = (str(activity_data.loc[i]["Activity Date"]).split(" ")[0].split("-")[1])
         day = (str(activity_data.loc[i]["Activity Date"]).split(" ")[0].split("-")[2])
-        new_date = f"{day}/{month}"
+        new_date = f"{day}-{month}"
+        new_date = pd.to_datetime(activity_data.loc[i]["Activity Date"]).date()
         formatted_dates.append(new_date)
     
     activity_data["Date"] = formatted_dates
-    '''
+
     
     print("Adding graph columns")
     print(f"\nData ready for plotting:")
@@ -196,18 +198,23 @@ def Plot_Graphs(activity_data, params):
 
     #print out graphs
     fig, ax = plt.subplots()
-    ani = animation.FuncAnimation(fig=fig, func=update, frames=activity_data.shape[0], interval=300)
-    ax.set(ylabel="km", xlabel="Date")
-    #ax.legend()
-    plt.show()
 
+    plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%m/%d'))
+    plt.gca().xaxis.set_major_locator(matplotlib.dates.AutoDateLocator())
+    fig.autofmt_xdate()
+
+    #ani = animation.FuncAnimation(fig=fig, func=update, frames=activity_data.shape[0], interval=500)
+    update(activity_data.shape[0])
+    ax.set(ylabel="km", xlabel="Date")
+    ax.legend()
+    plt.show()
+    plt.savefig(f"{params['today']}.png")
     return
 
 def update(frame):
 
     line1 = plt.plot(activity_data.loc[:frame]["Activity Date"], activity_data.loc[:frame]["Target Distance"], label="Target Distance", color="red")
     line2 = plt.step(activity_data.loc[:frame]["Activity Date"], activity_data.loc[:frame]["Cumulative Distance"], where="post", label=f"Total {params['activity_type']} Distance", color="blue")
-
     return line1, line2
 
 
