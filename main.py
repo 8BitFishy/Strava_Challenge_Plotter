@@ -4,31 +4,67 @@ import matplotlib
 import requests
 import urllib3
 import matplotlib.animation as animation
+from emailer import send_email
+from time import sleep
 
-def Download_Acitivies():
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    auth_url = "https://www.strava.com/oauth/token"
-    activites_url = "https://www.strava.com/api/v3/athlete/activities"
+def Get_Keys():
 
     ID_file_contents = []
     with open("IDs.txt", "r") as file:
         for line in file:
             line_text = line.split(":")
             for item in line_text:
-                ID_file_contents.append(item.strip("\n").strip(" "))
+                ID_file_contents.append(item.strip("\n"))
         file.close()
 
-    payload = {
-        'client_id': ID_file_contents[1],
-        'client_secret': ID_file_contents[3],
-        'refresh_token': ID_file_contents[5],
+    strava_payload = {
+        'client_id': ID_file_contents[1].strip(" "),
+        'client_secret': ID_file_contents[3].strip(" "),
+        'refresh_token': ID_file_contents[5].strip(" "),
         'grant_type': "refresh_token",
         'f': 'json'
     }
 
+    email_details = {
+        "email_sender": ID_file_contents[7].strip(" "),
+        "email_password": ID_file_contents[9],
+        "email_receiver": ID_file_contents[11].strip(" ")
+    }
+
+
+    return strava_payload, email_details
+
+def Get_Params():
+
+    today = pd.to_datetime('today').date()
+    start_date = pd.Timestamp(year=2025, month=1, day=1).date()
+    #start_date = (pd.Timestamp.today()-pd.offsets.YearBegin()).date()
+    #end_date = pd.to_datetime(f'{today.year}-12-31').date()
+    end_date = pd.Timestamp(year=2025, month=12, day=31).date()
+    target = 1000
+    duration = ((end_date - start_date).days+1)
+    daily_average = target/duration
+
+    params = {
+        "activity_type": "Run",
+        "start_date": start_date,
+        "today": today,
+        "end_date": end_date,
+        "target": target,
+        "daily_average": daily_average,
+        "duration": duration
+    }
+
+    return params
+
+def Download_Acitivies(strava_payload):
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    auth_url = "https://www.strava.com/oauth/token"
+    activites_url = "https://www.strava.com/api/v3/athlete/activities"
+
     print("\nRequesting Strava data: ", end="")
-    res = requests.post(auth_url, data=payload, verify=False)
+    res = requests.post(auth_url, data=strava_payload, verify=False)
     access_token = res.json()['access_token']
 
     #print("Access Token = {}".format(access_token))
@@ -105,7 +141,6 @@ def Filter_Data(full_data, params):
 
     return activity_data
 
-
 def Add_Dates(activity_data):
 
     print("\nAdding missing rows")
@@ -126,12 +161,14 @@ def Add_Dates(activity_data):
                 data_complete = True
             else:
                 continue
-        #convert the new activity to a dataframe and add to activity data, sort the values and reset the index
-        new_data = pd.DataFrame(new_data, columns=["Activity Date", "Distance"])
-        activity_data = pd.concat(objs=[activity_data, new_data], axis=0).sort_values(by="Activity Date").reset_index(drop=True)
+
+       #convert the new activity to a dataframe and add to activity data, sort the values and reset the index
+        if new_data != []:
+            new_data = pd.DataFrame(new_data, columns=["Activity Date", "Distance"])
+            print(f"New_data: \n{new_data}\n...")
+            activity_data = pd.concat(objs=[activity_data, new_data], axis=0).sort_values(by="Activity Date").reset_index(drop=True)
 
     return activity_data
-
 
 def Add_Graph_Columns(activity_data, params):
 
@@ -154,7 +191,6 @@ def Add_Graph_Columns(activity_data, params):
     activity_data["Target Distance"] = target_distance_column
 
     return activity_data
-
 
 def Plot_Graphs(activity_data, params):
 
@@ -183,18 +219,21 @@ def Plot_Graphs(activity_data, params):
     new_daily_average = round((params["target"]-distance_run)/days_to_target_date, 2)
 
     #print out targets
+    log = []
     print()
-    print(f"Your target is to {params['activity_type'].lower()} {params['target']} km in {params['duration']} days, starting on {params['start_date']} and ending on {params['end_date']}")
-    print(f"To hit this goal you need to average {round(params['daily_average'], 2)} km per day or {round(params['daily_average']*7, 2)} km per week")
-    print(f"As of today you have a total distance of {distance_run} km, to be on target this should be {target_distance_today} km")
+    log.append(f"Your target is to {params['activity_type'].lower()} {params['target']} km in {params['duration']} days, starting on {params['start_date']} and ending on {params['end_date']}.")
+    log.append(f"To hit this goal you need to average {round(params['daily_average'], 2)} km per day or {round(params['daily_average']*7, 2)} km per week.")
+    log.append(f"As of today you have a total distance of {distance_run} km, to be on target this should be {target_distance_today} km.")
 
-    print(f"You are currently {abs(round(target_distance_today - distance_run, 2))} km ", end="")
     if target_distance_today-distance_run <= 0:
-        print("ahead of target")
+        log.append(f"You are currently {abs(round(target_distance_today - distance_run, 2))} km ahead of target.")
     else:
-        print("behind target")
-    print(f"Your current average is {round(current_average, 2)} km per day, giving you a projection of {round(distance_run + (current_average * days_to_target_date), 2)} km by target date")
-    print(f"To hit your target you must now average {new_daily_average} km per day or {round(new_daily_average*7, 2)} km per week")
+        log.append(f"You are currently {abs(round(target_distance_today - distance_run, 2))} km behind target.")
+    log.append(f"Your current average is {round(current_average, 2)} km per day, giving you a projection of {round(distance_run + (current_average * days_to_target_date), 2)} km by target date.")
+    log.append(f"To hit your target you must now average {new_daily_average} km per day or {round(new_daily_average*7, 2)} km per week.")
+
+    for item in log:
+        print(item)
 
     #print out graphs
     fig, ax = plt.subplots()
@@ -207,9 +246,11 @@ def Plot_Graphs(activity_data, params):
     update(activity_data.shape[0])
     ax.set(ylabel="km", xlabel="Date")
     ax.legend()
-    plt.show()
-    plt.savefig(f"{params['today']}.png")
-    return
+    #plt.show()
+    figure_name = f"{params['today']}.png"
+    plt.savefig(figure_name)
+
+    return log, figure_name
 
 def update(frame):
 
@@ -217,40 +258,40 @@ def update(frame):
     line2 = plt.step(activity_data.loc[:frame]["Activity Date"], activity_data.loc[:frame]["Cumulative Distance"], where="post", label=f"Total {params['activity_type']} Distance", color="blue")
     return line1, line2
 
-
-def Get_Params():
-
-    today = pd.to_datetime('today').date()
-    start_date = pd.Timestamp(year=2025, month=1, day=1).date()
-    #start_date = (pd.Timestamp.today()-pd.offsets.YearBegin()).date()
-    #end_date = pd.to_datetime(f'{today.year}-12-31').date()
-    end_date = pd.Timestamp(year=2025, month=12, day=31).date()
-    target = 1000
-    duration = ((end_date - start_date).days+1)
-    daily_average = target/duration
-
-    params = {
-        "activity_type": "Run",
-        "start_date": start_date,
-        "today": today,
-        "end_date": end_date,
-        "target": target,
-        "daily_average": daily_average,
-        "duration": duration
-    }
-
-    return params
-
-
 if __name__ == '__main__':
-    params = Get_Params()
-    #full_data = pd.read_csv("export_110914245/activities.csv")
-    full_data = Download_Acitivies()
 
-    activity_data = Filter_Data(full_data, params)
+    email_sent = False
 
-    activity_data = Add_Dates(activity_data)
+    while True:
 
-    activity_data = Add_Graph_Columns(activity_data, params)
+        hour = pd.to_datetime('today').hour
 
-    Plot_Graphs(activity_data, params)
+        if email_sent is False and hour >= 8:
+
+            strava_payload, email_details = Get_Keys()
+
+            params = Get_Params()
+            #full_data = pd.read_csv("export_110914245/activities.csv")
+            full_data = Download_Acitivies(strava_payload)
+
+            activity_data = Filter_Data(full_data, params)
+
+            activity_data = Add_Dates(activity_data)
+
+            activity_data = Add_Graph_Columns(activity_data, params)
+
+            log, figure_name = Plot_Graphs(activity_data, params)
+
+            print("\nSending email...")
+            send_email(email_details, subject=f"Challenge Update - {params['today']}", body=log, pdf_path=figure_name)
+            print("Email sent")
+
+            email_sent = True
+
+            sleep(60*60)
+
+        elif hour < 8 and hour >= 6:
+
+            email_sent = False
+            sleep(60*60)
+
