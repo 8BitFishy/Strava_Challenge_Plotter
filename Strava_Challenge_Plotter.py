@@ -10,7 +10,7 @@ from time import sleep
 def Get_Keys():
 
     ID_file_contents = []
-    with open("IDs.txt", "r") as file:
+    with open("Strava_IDs.txt", "r") as file:
         for line in file:
             line_text = line.split(":")
             for item in line_text:
