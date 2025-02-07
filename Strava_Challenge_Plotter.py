@@ -4,7 +4,7 @@ import matplotlib
 import requests
 import urllib3
 import matplotlib.animation as animation
-from emailer import send_email
+from Emailer import send_email
 from time import sleep
 
 def Get_Keys():
