@@ -283,7 +283,7 @@ if __name__ == '__main__':
             log, figure_name = Plot_Graphs(activity_data, params)
 
             print("\nSending email...")
-            send_email(email_details, subject=f"Challenge Update - {params['today']}", body=log, pdf_path=figure_name)
+            send_email(email_details, subject=f"Challenge Update - {params['today']}", body=log, image_path=figure_name)
             print("Email sent")
 
             email_sent = True

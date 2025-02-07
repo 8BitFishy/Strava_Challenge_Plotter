@@ -8,7 +8,7 @@ import os
 context = ssl.create_default_context()
 
 
-def send_email(email_details, subject, body, pdf_path=None, is_html=False):
+def send_email(email_details, subject, body, image_path=None, is_html=False):
     em = EmailMessage()
 
     em['From'] = email_details["email_sender"]
@@ -25,16 +25,16 @@ def send_email(email_details, subject, body, pdf_path=None, is_html=False):
         em.set_content(email_body)
 
     # Attach PDF if provided
-    if pdf_path:
+    if image_path:
         # Guess the MIME type and subtype
-        mime_type, _ = mimetypes.guess_type(pdf_path)
+        mime_type, _ = mimetypes.guess_type(image_path)
         mime_type, mime_subtype = mime_type.split('/')
 
-        with open(pdf_path, 'rb') as pdf_file:
+        with open(image_path, 'rb') as pdf_file:
             em.add_attachment(pdf_file.read(),
                               maintype=mime_type,
                               subtype=mime_subtype,
-                              filename=os.path.basename(pdf_path))
+                              filename=os.path.basename(image_path))
 
     # Log in and send the email
     with smtplib.SMTP_SSL('smtp.gmail.com', 465, context=context) as smtp:
